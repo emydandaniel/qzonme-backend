@@ -2,8 +2,29 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import * as pathModule from "path";
+import cors from "cors";
+import helmet from "helmet";
+import compression from "compression";
 
 const app = express();
+
+// Security headers
+app.use(helmet());
+
+// Enable CORS
+const allowedOrigins = [
+  "https://qzonme-frontend-keuh.vercel.app",
+  "https://qzonme.com" // Optional for future custom domain
+];
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true,
+}));
+
+// Enable response compression
+app.use(compression());
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -42,10 +63,12 @@ app.use((req, res, next) => {
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
-    const message = err.message || "Internal Server Error";
+    const message = app.get("env") === "development" ? err.message : "Internal Server Error";
 
     res.status(status).json({ message });
-    throw err;
+    if (app.get("env") === "development") {
+      console.error(err);
+    }
   });
 
   // importantly only setup vite in development and after
