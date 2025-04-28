@@ -1,0 +1,84 @@
+import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
+import { setupVite, serveStatic, log } from "./vite";
+import * as pathModule from "path";
+
+const app = express();
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const reqPath = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined = undefined;
+
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (reqPath.startsWith("/api")) {
+      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) {
+        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      }
+
+      if (logLine.length > 80) {
+        logLine = logLine.slice(0, 79) + "…";
+      }
+
+      log(logLine);
+    }
+  });
+
+  next();
+});
+
+(async () => {
+  const server = await registerRoutes(app);
+
+  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+    const status = err.status || err.statusCode || 500;
+    const message = err.message || "Internal Server Error";
+
+    res.status(status).json({ message });
+    throw err;
+  });
+
+  // importantly only setup vite in development and after
+  // setting up all the other routes so the catch-all route
+  // doesn't interfere with the other routes
+  if (app.get("env") === "development") {
+    await setupVite(app, server);
+  } else {
+    serveStatic(app);
+    
+    // History API fallback - serve index.html for any route that doesn't match an API or static resource
+    // This is necessary for client-side routing to work with direct URL access
+    app.get('*', (req, res) => {
+      // Skip API routes
+      if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/assets')) {
+        return;
+      }
+      
+      // For all other routes, serve the index.html file
+      const distPath = pathModule.resolve(import.meta.dirname, "public");
+      res.sendFile(pathModule.resolve(distPath, "index.html"));
+    });
+  }
+
+  // ALWAYS serve the app on port 3000
+  // this serves both the API and the client.
+  // It is the only port that is not firewalled.
+  const port = 3000;
+  server.listen({
+    port,
+    host: "127.0.0.1",
+    reusePort: true,
+  }, () => {
+    log(`serving on port ${port}`);
+  });
+})();
