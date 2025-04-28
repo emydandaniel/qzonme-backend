@@ -70,15 +70,10 @@ export function serveStatic(app: Express) {
 
   if (!fs.existsSync(distPath)) {
     console.warn(
-      `Warning: Could not find the build directory: ${distPath}. Skipping static file serving.`
+      `Warning: Static file serving skipped as the directory does not exist: ${distPath}`
     );
-    return; // Skip static file serving if the directory does not exist
+    return; // Skip static file serving entirely
   }
 
   app.use(express.static(distPath));
-
-  // Fall through to index.html if the file doesn't exist
-  app.use("*", (_req, res) => {
-    res.sendFile(path.resolve(distPath, "index.html"));
-  });
 }
