@@ -45,9 +45,15 @@ export class DatabaseStorage implements IStorage {
     if (!insertUser.username || !insertUser.username.trim()) {
       throw new Error("Username is required");
     }
-    
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
+    console.log("Attempting to create user with data:", insertUser);
+    try {
+      const [user] = await db.insert(users).values(insertUser).returning();
+      console.log("User created successfully:", user);
+      return user;
+    } catch (error) {
+      console.error("Error creating user:", error);
+      throw error;
+    }
   }
   
   // Quiz methods
