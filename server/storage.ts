@@ -52,7 +52,12 @@ export class DatabaseStorage implements IStorage {
       return user;
     } catch (error) {
       console.error("Error creating user:", error);
-      console.error("Database error details:", error.message, error.stack);
+      if (error instanceof Error) {
+        console.error("Error message:", error.message);
+        console.error("Error stack:", error.stack);
+      } else {
+        console.error("Unknown error type:", error);
+      }
       throw error;
     }
   }
