@@ -52,6 +52,7 @@ export class DatabaseStorage implements IStorage {
       return user;
     } catch (error) {
       console.error("Error creating user:", error);
+      console.error("Database error details:", error.message, error.stack);
       throw error;
     }
   }
