@@ -598,6 +598,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Debug endpoint to check DB connection and list tables
+  app.get("/api/debug/db", async (_req, res) => {
+    try {
+      const tables = await db.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = 'public';");
+      res.json({ message: "Database connection successful", tables });
+    } catch (error) {
+      console.error("Database debug error:", error);
+      res.status(500).json({ message: "Database connection failed", error: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
