@@ -99,6 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = await storage.createUser(userData);
       res.status(201).json(user);
     } catch (error) {
+      console.error("Error details:", error);
       if (error instanceof z.ZodError) {
         res.status(400).json({ message: "Invalid user data", error: (error as z.ZodError).message });
       } else {
