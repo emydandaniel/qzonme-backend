@@ -1,107 +1,34 @@
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
-import * as pathModule from "path";
-import cors from "cors";
-import helmet from "helmet";
-import compression from "compression";
+import express from 'express';
+import { registerRoutes } from './routes';
+import { pool } from './db';
 
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// Security headers
-app.use(helmet());
-
-// Enable CORS
-const allowedOrigins = [
-  "https://qzonme-frontend-keuh.vercel.app",
-  "https://qzonme.com" // Optional for future custom domain
-];
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "DELETE"],
-  credentials: true,
-}));
-
-// Enable response compression
-app.use(compression());
-
+// Middleware to parse JSON
 app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
 
-app.use((req, res, next) => {
-  const start = Date.now();
-  const reqPath = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (reqPath.startsWith("/api")) {
-      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
+// Health check route
+app.get('/health', (_req, res) => {
+  res.status(200).json({ status: 'ok' });
 });
 
 (async () => {
-  const server = await registerRoutes(app);
+  try {
+    // Test database connection
+    const client = await pool.connect();
+    console.log('Database connection successful');
+    client.release();
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
-    const status = err.status || err.statusCode || 500;
-    const message = app.get("env") === "development" ? err.message : "Internal Server Error";
+    // Register application routes
+    await registerRoutes(app);
 
-    res.status(status).json({ message });
-    if (app.get("env") === "development") {
-      console.error(err);
-    }
-  });
-
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (app.get("env") === "development") {
-    await setupVite(app, server);
-  } else {
-    serveStatic(app);
-    
-    // History API fallback - serve index.html for any route that doesn't match an API or static resource
-    // This is necessary for client-side routing to work with direct URL access
-    app.get('*', (req, res) => {
-      // Skip API routes
-      if (req.path.startsWith('/api') || req.path.startsWith('/uploads') || req.path.startsWith('/assets')) {
-        return;
-      }
-      
-      // For all other routes, serve the index.html file
-      const distPath = pathModule.resolve(import.meta.dirname, "public");
-      res.sendFile(pathModule.resolve(distPath, "index.html"));
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`Server is running on port ${PORT}`);
     });
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1); // Exit the process if DB connection fails
   }
-
-  // ALWAYS serve the app on port 3000
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = process.env.PORT || 3000;
-  server.listen({
-    port,
-    host: "0.0.0.0",
-    reusePort: true,
-  }, () => {
-    log(`serving on port ${port}`);
-  });
 })();
