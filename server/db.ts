@@ -14,9 +14,12 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-console.log("DATABASE_URL:", process.env.DATABASE_URL);
+// Fallback for local testing
+const DATABASE_URL = process.env.DATABASE_URL || "postgresql://localhost:5432/qzonme";
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+console.log("Effective DATABASE_URL:", DATABASE_URL);
+
+export const pool = new Pool({ connectionString: DATABASE_URL });
 export const db = drizzle({ client: pool, schema });
 
 // Test database connection on startup
